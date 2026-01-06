@@ -11,35 +11,44 @@
 // [12] [13] [14] [15]
 
 // Randomise mines (DONE)
-// Detect player with LDR
-// Trigger mine when player stands on it
-// Mine deactivates after trigger
+// Detect player with LDR (DONE)
+// Trigger mine when player stands on it (DONE)
+// Mine deactivates after trigger (DONE)
 // Timer and dice
 // Multiplexer
 
-#define BOARD_SIZE 16
-#define MINE_COUNT 6
+#define BOARD_SIZE 14 // multiplexer nodig voor 16!
+#define MINE_COUNT 6 // aantal mijnen
+#define LDR_THRESHOLD 100 // adjust based on light
 
 bool hasMine[BOARD_SIZE];
 
-#define LDR_PIN 34 // test ldr
-#define LDR_THRESHOLD 100 // adjust based on light
+int ldrPins[BOARD_SIZE] = { // ldr pins, mux nodig voor 16!
+    15, 2, 4, 22,
+    13, 12, 14, 27,
+    26, 25, 33, 32,
+    35, 34
+};
 
-bool pawnPresent() {
-    int value = analogRead(LDR_PIN);
-    return value < LDR_THRESHOLD; // returns true if pawn is present
-}
+struct Mine {
+    int pin;            // LDR pin
+    bool triggered;     // has mine exploded?
+    bool previousState;
+};
+
+Mine mines[MINE_COUNT];
 
 void setup() {
     Serial.begin(9600);
-    delay(5000); // Time to open serial monitor
-
+    delay(5000); // time to open serial monitor
     randomSeed(esp_random());
+
     setupMines();
 }
 
 void loop() {
     checkMines();
+    delay(50); // polling
 }
 
 // set up a new game
@@ -76,19 +85,28 @@ void setupMines() {
         }
         Serial.println();
     }
+    int mineIndex = 0;
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        if (hasMine[i]) {
+            mines[mineIndex].pin = ldrPins[i];
+            mines[mineIndex].triggered = false;
+            mines[mineIndex].previousState = false;
+            mineIndex++;
+        }
+    }
 }
 
-
-bool previousState = false;
-bool mineTriggered = false;
 void checkMines() {
-    if (mineTriggered) return; // only trigger a mine once
+    for (int i = 0; i < MINE_COUNT; i++) {
+        if (mines[i].triggered) continue; // skip triggered mines
 
-    bool currentState = pawnPresent(); // only trigger a mine when a pawn arrives
+        bool currentState = analogRead(mines[i].pin) < LDR_THRESHOLD;
 
-    if (!previousState && currentState) {
-        mineTriggered = true;
-        Serial.println("Mine triggered");
+        if (!mines[i].previousState && currentState) { // only trigger a mine when a pawn arrives
+            mines[i].triggered = true; // mine can only explode once
+            Serial.print("Mine triggered: ");
+            Serial.println(i);
+        }
+        mines[i].previousState = currentState;
     }
-    previousState = currentState;
 }
