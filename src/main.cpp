@@ -17,7 +17,7 @@
 // Timer and dice
 // Multiplexer
 
-#define BOARD_SIZE 14 // multiplexer nodig voor 16!
+#define BOARD_SIZE 16 // multiplexer nodig voor 16!
 #define MINE_COUNT 6 // aantal mijnen
 #define LDR_THRESHOLD 100 // adjust based on light
 
@@ -27,7 +27,7 @@ int ldrPins[BOARD_SIZE] = { // ldr pins, mux nodig voor 16!
     15, 2, 4, 22,
     13, 12, 14, 27,
     26, 25, 33, 32,
-    35, 34
+    35, 34, 39, 36
 };
 
 struct Mine {
