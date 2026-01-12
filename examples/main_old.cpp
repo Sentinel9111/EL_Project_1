@@ -1,40 +1,21 @@
 #include <Arduino.h>
 #include "headers.h"
-// 16 LDR's "4x4" grid
-
-// [0 ] [1 ] [2 ] [3 ]
-
-// [4 ] [5 ] [6 ] [7 ]
-
-// [8 ] [9 ] [10] [11]
-
-// [12] [13] [14] [15]
-
-// Randomise mines (DONE)
-// Detect player with LDR (DONE)
-// Trigger mine when player stands on it (DONE)
-// Mine deactivates after trigger (DONE)
-// ST7735S TFT Display
-// Timer and dice
-// Multiplexer (DONE)
-
-#define MUX_SIG 34 // ADC input
-#define MUX_S0 16
-#define MUX_S1 17
-#define MUX_S2 25
-#define MUX_S3 26
 
 #define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
 #define LDR_THRESHOLD 100 // adjust based on light
 
-static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if MINE_COUNT is allowed
-// kijk Arnold ik heb vrijwillig een assertion geschreven!
-
 bool hasMine[BOARD_SIZE];
 
+int ldrPins[BOARD_SIZE] = { // LDR pins
+    15, 2, 4, 22,
+    13, 12, 14, 27,
+    26, 25, 33, 32,
+    35, 34, 39, 36
+};
+
 struct Mine {
-    int index;            // LDR mux channel
+    int pin;            // LDR pin
     bool triggered;     // has mine exploded?
     bool previousState;
 };
@@ -44,13 +25,8 @@ Mine mines[MINE_COUNT];
 void setup() {
     Serial.begin(9600);
     delay(5000); // time to open serial monitor
-
-    pinMode(MUX_S0, OUTPUT);
-    pinMode(MUX_S1, OUTPUT);
-    pinMode(MUX_S2, OUTPUT);
-    pinMode(MUX_S3, OUTPUT);
-
     randomSeed(esp_random());
+
     setupMines();
 }
 
@@ -59,20 +35,12 @@ void loop() {
     delay(50); // polling
 }
 
-// randomly place mines on the board and initialize mines
+// set up a new game
 void setupMines() {
     // clear board
     for (int i = 0; i < BOARD_SIZE; i++) {
         hasMine[i] = false;
     }
-
-    // clear mine index
-    for (int i = 0; i < MINE_COUNT; i++) {
-        mines[i].index = -1;
-        mines[i].triggered = true;
-        mines[i].previousState = false;
-    }
-
     // place mines
     int placedMines = 0;
     while (placedMines < MINE_COUNT) {
@@ -92,7 +60,6 @@ void setupMines() {
         }
     }
     Serial.println();
-
     // print mines in grid
     Serial.println("Mine grid:");
     for (int row = 0; row < 4; row++) {
@@ -102,12 +69,10 @@ void setupMines() {
         }
         Serial.println();
     }
-
-    // loop over every square and index mines
     int mineIndex = 0;
     for (int i = 0; i < BOARD_SIZE; i++) {
         if (hasMine[i]) {
-            mines[mineIndex].index = i;
+            mines[mineIndex].pin = ldrPins[i];
             mines[mineIndex].triggered = false;
             mines[mineIndex].previousState = false;
             mineIndex++;
@@ -115,40 +80,17 @@ void setupMines() {
     }
 }
 
-// poll all active mines and detect when pawn arrives at an LDR square
 void checkMines() {
     for (int i = 0; i < MINE_COUNT; i++) {
         if (mines[i].triggered) continue; // skip triggered mines
 
-        bool currentState = pawnPresentAt(mines[i].index);
+        bool currentState = analogRead(mines[i].pin) < LDR_THRESHOLD;
 
         if (!mines[i].previousState && currentState) { // only trigger a mine when a pawn arrives
-            mines[i].triggered = true; // mine can only explode once
+            mines[i].triggered = true; // deactivate mine after exploding
             Serial.print("Mine triggered: ");
             Serial.println(i);
         }
         mines[i].previousState = currentState;
     }
-}
-
-// select multiplexer channel
-void muxSelect(int channel) {
-    digitalWrite(MUX_S0, channel & 0x01);
-    digitalWrite(MUX_S1, channel & 0x02);
-    digitalWrite(MUX_S2, channel & 0x04);
-    digitalWrite(MUX_S3, channel & 0x08);
-}
-
-// check if pawn is present on an LDR square
-bool pawnPresentAt(int index) {
-    muxSelect(index);
-    delayMicroseconds(5); // wait for mux
-
-    // account for noise at the cost of 5 microseconds
-    int value1 = analogRead(MUX_SIG);
-    delayMicroseconds(5);
-    int value2 = analogRead(MUX_SIG);
-
-    int value = (value1 + value2) / 2;
-    return value < LDR_THRESHOLD;
 }
