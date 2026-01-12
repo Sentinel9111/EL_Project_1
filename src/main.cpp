@@ -12,7 +12,7 @@
 // Trigger mine when player stands on it (DONE)
 // Mine deactivates after trigger (DONE)
 // ST7735S display
-// Timer and die (dice) (DONE)
+// Timer and die (DONE)
 // Multiplexer (DONE)
 // LEDs and piëzo
 // Reset
@@ -24,8 +24,9 @@
 #define MUX_S2 25
 #define MUX_S3 26
 
-// button
+// buttons
 #define BUTTON 32
+#define RESET_BUTTON 33
 
 #define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
@@ -61,7 +62,33 @@ const unsigned long scanInterval = 50;
 
 unsigned long lastSecondTick = 0;
 
-bool buttonLastState = HIGH;
+int dieValue = 0;
+
+// button
+volatile bool buttonPressed = false;
+unsigned long lastButtonPress = 0;
+const unsigned long debounceDelay = 50;
+// reset button
+volatile bool resetPressed = false;
+unsigned long lastResetPress = 0;
+
+// button interrupt
+void IRAM_ATTR buttonInterrupt() {
+    unsigned long now = millis();
+    if (now - lastButtonPress > debounceDelay) {
+        buttonPressed = true;
+        lastButtonPress = now;
+    }
+}
+
+// reset button interrupt
+void IRAM_ATTR resetInterrupt() {
+    unsigned long now = millis();
+    if (now - lastResetPress > debounceDelay) {
+        resetPressed = true;
+        lastResetPress = now;
+    }
+}
 
 void setup() {
     Serial.begin(9600);
@@ -73,26 +100,38 @@ void setup() {
     pinMode(MUX_S3, OUTPUT);
 
     pinMode(BUTTON, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+    pinMode (RESET_BUTTON, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(RESET_BUTTON), resetInterrupt, FALLING);
 
     randomSeed(esp_random());
     setupMines();
+
+    lastSecondTick = millis();
 }
 
 void loop() {
-    // polling
+    // poll mines
     if (millis() - lastScan >= scanInterval) {
         lastScan = millis();
         checkMines();
     }
 
+    // update timers
     updateTimers();
 
-    // debounce button
-    bool buttonState = digitalRead(BUTTON);
-    if (buttonLastState == HIGH && buttonState == LOW) {
+    // handle button press
+    if (buttonPressed) {
+        buttonPressed = false;
+        Serial.println("button pressed");
         buttonPress();
     }
-    buttonLastState = buttonState;
+    // handle reset button press
+    if (resetPressed) {
+        resetPressed = false;
+        Serial.println("reset pressed");
+        resetGame();
+    }
 }
 
 // randomly place mines on the board and initialize mines
@@ -109,7 +148,7 @@ void setupMines() {
         mines[i].previousState = false;
     }
 
-    // place mines
+    // place mines randomly
     int placedMines = 0;
     while (placedMines < MINE_COUNT) {
         int pos = random(0, BOARD_SIZE);
@@ -119,7 +158,7 @@ void setupMines() {
         }
     }
 
-    // print mines
+    // print mines to serial
     Serial.print("Mines at positions: ");
     for (int i = 0; i < BOARD_SIZE; i++) {
         if (hasMine[i]) {
@@ -129,7 +168,7 @@ void setupMines() {
     }
     Serial.println();
 
-    // print mines in grid
+    // print mines in grid to serial
     Serial.println("Mine grid:");
     for (int row = 0; row < 4; row++) {
         for (int col = 0; col < 4; col++) {
@@ -208,17 +247,31 @@ void updateTimers() {
 }
 
 // roll a d4 die
-int diceValue = 0;
-void rollDice() {
-    diceValue = random(1, 5);
+void rollDie() {
+    dieValue = random(1, 5);
+    Serial.print("Die: ");
+    Serial.print(dieValue);
+    Serial.println();
 }
 
+// roll die and switch player when button is pressed
 void buttonPress() {
-    rollDice();
+    rollDie();
 
     if (state == IDLE) {
         state = RUNNING;
     } else if (state == RUNNING) {
         currentPlayer = 1 - currentPlayer;
+        Serial.print("Player #");
+        Serial.print(currentPlayer);
+        Serial.println("'s turn");
     }
+}
+
+void resetGame() {
+    state = IDLE;
+    currentPlayer = 0;
+    playerTime[0] = PLAYER_TIME;
+    playerTime[1] = PLAYER_TIME;
+    setupMines();
 }
