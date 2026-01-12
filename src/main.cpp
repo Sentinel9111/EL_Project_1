@@ -3,29 +3,33 @@
 // 16 LDR's "4x4" grid
 
 // [0 ] [1 ] [2 ] [3 ]
-
 // [4 ] [5 ] [6 ] [7 ]
-
 // [8 ] [9 ] [10] [11]
-
 // [12] [13] [14] [15]
 
 // Randomise mines (DONE)
 // Detect player with LDR (DONE)
 // Trigger mine when player stands on it (DONE)
 // Mine deactivates after trigger (DONE)
-// ST7735S TFT Display
-// Timer and dice
+// ST7735S display
+// Timer and die (dice) (DONE)
 // Multiplexer (DONE)
+// LEDs and piëzo
+// Reset
 
+// multiplexer
 #define MUX_SIG 34 // ADC input
 #define MUX_S0 16
 #define MUX_S1 17
 #define MUX_S2 25
 #define MUX_S3 26
 
+// button
+#define BUTTON 32
+
 #define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
+#define PLAYER_TIME 120 // amount of time in seconds each player has
 #define LDR_THRESHOLD 100 // adjust based on light
 
 static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if MINE_COUNT is allowed
@@ -34,12 +38,30 @@ static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if M
 bool hasMine[BOARD_SIZE];
 
 struct Mine {
-    int index;            // LDR mux channel
-    bool triggered;     // has mine exploded?
+    int index; // LDR mux channel
+    bool triggered; // has mine exploded?
     bool previousState;
 };
 
 Mine mines[MINE_COUNT];
+
+enum State {
+    IDLE,
+    RUNNING,
+    EXPLODED
+};
+
+State state = IDLE;
+
+int playerTime[2] = {PLAYER_TIME, PLAYER_TIME};
+int currentPlayer = 0;
+
+unsigned long lastScan = 0;
+const unsigned long scanInterval = 50;
+
+unsigned long lastSecondTick = 0;
+
+bool buttonLastState = HIGH;
 
 void setup() {
     Serial.begin(9600);
@@ -50,13 +72,27 @@ void setup() {
     pinMode(MUX_S2, OUTPUT);
     pinMode(MUX_S3, OUTPUT);
 
+    pinMode(BUTTON, INPUT_PULLUP);
+
     randomSeed(esp_random());
     setupMines();
 }
 
 void loop() {
-    checkMines();
-    delay(50); // polling
+    // polling
+    if (millis() - lastScan >= scanInterval) {
+        lastScan = millis();
+        checkMines();
+    }
+
+    updateTimers();
+
+    // debounce button
+    bool buttonState = digitalRead(BUTTON);
+    if (buttonLastState == HIGH && buttonState == LOW) {
+        buttonPress();
+    }
+    buttonLastState = buttonState;
 }
 
 // randomly place mines on the board and initialize mines
@@ -151,4 +187,38 @@ bool pawnPresentAt(int index) {
 
     int value = (value1 + value2) / 2;
     return value < LDR_THRESHOLD;
+}
+
+// player timers
+void updateTimers() {
+    if (state != RUNNING) return;
+
+    if (millis() - lastSecondTick >= 1000) {
+        lastSecondTick += 1000;
+        playerTime[currentPlayer]--;
+
+        // check if the player ran out of time
+        if (playerTime[currentPlayer] <= 0) {
+            state = IDLE;
+            Serial.print("Player #");
+            Serial.print(currentPlayer);
+            Serial.println(" ran out of time");
+        }
+    }
+}
+
+// roll a d4 die
+int diceValue = 0;
+void rollDice() {
+    diceValue = random(1, 5);
+}
+
+void buttonPress() {
+    rollDice();
+
+    if (state == IDLE) {
+        state = RUNNING;
+    } else if (state == RUNNING) {
+        currentPlayer = 1 - currentPlayer;
+    }
 }
