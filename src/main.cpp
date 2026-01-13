@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7735.h>
 #include "headers.h"
 // 16 LDR's "4x4" grid
 
@@ -15,7 +18,14 @@
 // Timer and die (DONE)
 // Multiplexer (DONE)
 // LEDs and piëzo
-// Reset
+// Reset (DONE)
+
+// ST7735S TFT screen
+#define TFT_CS   5
+#define TFT_DC   4
+#define TFT_RST  2
+#define TFT_SCLK 18
+#define TFT_MOSI 23
 
 // multiplexer
 #define MUX_SIG 34 // ADC input
@@ -36,7 +46,14 @@
 static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if MINE_COUNT is allowed
 // kijk Arnold ik heb vrijwillig een assertion geschreven!
 
-bool hasMine[BOARD_SIZE];
+// Display layout
+#define TIMER_X  10
+#define P1_Y     20
+#define P2_Y     90
+#define DIE_X   130
+#define DIE_Y   50
+
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 struct Mine {
     int index; // LDR mux channel
@@ -45,29 +62,30 @@ struct Mine {
 };
 
 Mine mines[MINE_COUNT];
+bool hasMine[BOARD_SIZE];
 
 enum State {
-    IDLE,
-    RUNNING,
-    EXPLODED
+    IDLE, // waiting for game to start
+    RUNNING, // game is running
+    GAME_OVER // all mines exploded or time ran out
 };
 
 State state = IDLE;
 
 int playerTime[2] = {PLAYER_TIME, PLAYER_TIME};
 int currentPlayer = 0;
-
-unsigned long lastScan = 0;
-const unsigned long scanInterval = 50;
-
-unsigned long lastSecondTick = 0;
-
 int dieValue = 0;
+
+// millis()
+unsigned long lastScan = 0;
+constexpr unsigned long scanInterval = 50;
+unsigned long lastSecondTick = 0;
+static unsigned long lastDisplayUpdate = 0;
 
 // button
 volatile bool buttonPressed = false;
 unsigned long lastButtonPress = 0;
-const unsigned long debounceDelay = 50;
+const unsigned long debounceDelay = 100;
 // reset button
 volatile bool resetPressed = false;
 unsigned long lastResetPress = 0;
@@ -92,7 +110,10 @@ void IRAM_ATTR resetInterrupt() {
 
 void setup() {
     Serial.begin(9600);
-    delay(5000); // time to open serial monitor
+    SPI.begin(TFT_SCLK, -1, TFT_MOSI);
+    tft.initR(INITR_BLACKTAB);
+    tft.setRotation(1);
+    tft.fillScreen(ST77XX_BLACK);
 
     pinMode(MUX_S0, OUTPUT);
     pinMode(MUX_S1, OUTPUT);
@@ -117,8 +138,9 @@ void loop() {
         checkMines();
     }
 
-    // update timers
+    // update timer and display
     updateTimers();
+    updateDisplay();
 
     // handle button press
     if (buttonPressed) {
@@ -192,6 +214,8 @@ void setupMines() {
 
 // poll all active mines and detect when pawn arrives at an LDR square
 void checkMines() {
+    if (state != RUNNING) return;
+
     for (int i = 0; i < MINE_COUNT; i++) {
         if (mines[i].triggered) continue; // skip triggered mines
 
@@ -201,6 +225,11 @@ void checkMines() {
             mines[i].triggered = true; // mine can only explode once
             Serial.print("Mine triggered: ");
             Serial.println(i);
+
+            if (allMinesTriggered()) {
+                state = GAME_OVER;
+                Serial.println("All mines have been exploded");
+            }
         }
         mines[i].previousState = currentState;
     }
@@ -234,13 +263,15 @@ void updateTimers() {
 
     if (millis() - lastSecondTick >= 1000) {
         lastSecondTick += 1000;
-        playerTime[currentPlayer]--;
+        if (playerTime[currentPlayer] > 0) {
+            playerTime[currentPlayer]--;
+        }
 
         // check if the player ran out of time
         if (playerTime[currentPlayer] <= 0) {
-            state = IDLE;
+            state = GAME_OVER;
             Serial.print("Player #");
-            Serial.print(currentPlayer);
+            Serial.print(currentPlayer + 1);
             Serial.println(" ran out of time");
         }
     }
@@ -260,6 +291,7 @@ void buttonPress() {
 
     if (state == IDLE) {
         state = RUNNING;
+        lastSecondTick = millis();
     } else if (state == RUNNING) {
         currentPlayer = 1 - currentPlayer;
         Serial.print("Player #");
@@ -268,10 +300,59 @@ void buttonPress() {
     }
 }
 
+// reset the game if the reset button is pressed
 void resetGame() {
     state = IDLE;
     currentPlayer = 0;
     playerTime[0] = PLAYER_TIME;
     playerTime[1] = PLAYER_TIME;
     setupMines();
+
+    lastSecondTick = millis();
+    tft.fillScreen(ST77XX_BLACK);
+}
+
+// check if all mines have been exploded
+bool allMinesTriggered() {
+    for (int i = 0; i < MINE_COUNT; i++) {
+        if (!mines[i].triggered) return false;
+    }
+    return true;
+}
+
+void drawPlayerTimer(int seconds, int y, bool active) {
+    int min = seconds / 60;
+    int sec = seconds % 60;
+
+    char buf[6];
+    sprintf(buf, "%02d:%02d", min, sec);
+
+    tft.setTextSize(3);
+    tft.setTextColor(active ? ST77XX_GREEN : ST77XX_WHITE, ST77XX_BLACK);
+    tft.setCursor(TIMER_X, y);
+    tft.print(buf);
+}
+
+void drawDie(int value) {
+    tft.setTextSize(4);
+    tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+    tft.setCursor(DIE_X, DIE_Y);
+    tft.print(value);
+}
+
+void updateDisplay() {
+    if (millis() - lastDisplayUpdate < 200) return;
+    lastDisplayUpdate = millis();
+
+    drawPlayerTimer(playerTime[0], P1_Y, state == RUNNING && currentPlayer == 0);
+    drawPlayerTimer(playerTime[1], P2_Y, state == RUNNING && currentPlayer == 1);
+
+    if (state == GAME_OVER) {
+        tft.setTextSize(2);
+        tft.setCursor(10, 60);
+        tft.setTextColor(ST77XX_RED);
+        tft.print("Game Over");
+    } else {
+        drawDie(dieValue);
+    }
 }

@@ -9,5 +9,9 @@ void updateTimers();
 void rollDie();
 void buttonPress();
 void resetGame();
+bool allMinesTriggered();
+void drawPlayerTimer(int seconds, int y, bool active);
+void drawDie(int value);
+void updateDisplay();
 
 #endif //EL_PROJECT_1_HEADERS_H
