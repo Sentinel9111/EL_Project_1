@@ -90,4 +90,9 @@ Wanneer de resetknop wordt ingedrukt:
 - Nieuwe mijnen worden willekeurig geplaatst.
 - Het scherm wordt leeggemaakt.
 
-<!-- ## Flowchart -->
+## Flowchart
+Hier is een erg versimpelde flowchart van de code.
+\
+<object data="/other/Flowchart.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="/other/Flowchart.pdf"><a href="/other/Flowchart.pdf"></embed>
+</object>
