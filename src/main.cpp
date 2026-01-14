@@ -18,6 +18,8 @@
 #define MUX_S2 33
 #define MUX_S3 25
 
+#define BOMB_LIGHT 12
+#define BIG_SOUND 13
 // buttons
 #define BUTTON 19
 #define RESET_BUTTON 21
@@ -73,6 +75,10 @@ const unsigned long debounceDelay = 200;
 // reset button
 volatile bool resetPressed = false;
 unsigned long lastResetPress = 0;
+//big sound
+bool playBeep = false;
+unsigned long beepStart = 0;
+const unsigned long beepDuration = 500;
 
 // button interrupt
 void IRAM_ATTR buttonInterrupt() {
@@ -104,6 +110,10 @@ void setup() {
     pinMode(MUX_S2, OUTPUT);
     pinMode(MUX_S3, OUTPUT);
 
+    pinMode(BOMB_LIGHT, OUTPUT);
+    pinMode(BIG_SOUND, OUTPUT);
+    digitalWrite(BIG_SOUND, LOW);
+
     pinMode(BUTTON, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
     pinMode (RESET_BUTTON, INPUT_PULLUP);
@@ -125,6 +135,9 @@ void loop() {
     // update timer and display
     updateTimers();
     updateDisplay();
+
+    //handle mine explosions
+    MineExplode(); 
 
     // handle button press
     if (buttonPressed) {
@@ -210,6 +223,8 @@ void checkMines() {
             Serial.print("Mine triggered: ");
             Serial.println(i);
 
+            playBeep = true; //play big sound
+
             if (allMinesTriggered()) {
                 state = GAME_OVER;
                 Serial.println("All mines have been exploded");
@@ -217,6 +232,19 @@ void checkMines() {
         }
         mines[i].previousState = currentState;
     }
+}
+//mine explodes setting of led
+void MineExplode(){
+    if (playBeep) {
+    digitalWrite(BIG_SOUND, HIGH);
+    digitalWrite(BOMB_LIGHT, HIGH);
+
+    if (millis() - beepStart >= beepDuration) {
+      digitalWrite(BIG_SOUND, LOW);
+      digitalWrite(BOMB_LIGHT, LOW);
+      playBeep = false;
+    }
+  }
 }
 
 // select multiplexer channel
