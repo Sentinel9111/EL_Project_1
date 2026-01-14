@@ -13,10 +13,10 @@
 
 // multiplexer
 #define MUX_SIG 34 // ADC input
-#define MUX_S0 35
-#define MUX_S1 32
-#define MUX_S2 33
-#define MUX_S3 25
+#define MUX_S0 25
+#define MUX_S1 26
+#define MUX_S2 27
+#define MUX_S3 14
 
 // LED and piëzo
 #define BOMB_LIGHT 12
@@ -29,7 +29,7 @@
 #define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
 #define PLAYER_TIME 120 // amount of time in seconds each player has
-#define LDR_THRESHOLD 100 // adjust based on light
+#define LDR_THRESHOLD 2500 // adjust based on light
 
 static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if MINE_COUNT is allowed
 // kijk Arnold ik heb vrijwillig een assertion geschreven!
@@ -115,7 +115,6 @@ void setup() {
 
     pinMode(BOMB_LIGHT, OUTPUT);
     pinMode(BIG_SOUND, OUTPUT);
-    digitalWrite(BIG_SOUND, LOW);
 
     pinMode(BUTTON, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
@@ -154,6 +153,9 @@ void loop() {
         Serial.println("reset pressed");
         resetGame();
     }
+    // debugReadLDR(0);   // <-- test LDR channel 0
+    // delay(500);
+    // return;
 }
 
 // randomly place mines on the board and initialize mines
@@ -226,7 +228,8 @@ void checkMines() {
             Serial.print("Mine triggered: ");
             Serial.println(i);
 
-            playBeep = true; //play big sound
+            playBeep = true; // play big sound
+            beepStart = millis();
 
             if (allMinesTriggered()) {
                 state = GAME_OVER;
@@ -238,17 +241,17 @@ void checkMines() {
 }
 
 // play a sound and turn an LED on when the bomb explodes
-void mineExplode(){
+void mineExplode() {
     if (playBeep) {
-    digitalWrite(BIG_SOUND, HIGH);
-    digitalWrite(BOMB_LIGHT, HIGH);
+        tone(BIG_SOUND, 2000);
+        digitalWrite(BOMB_LIGHT, HIGH);
 
-    if (millis() - beepStart >= beepDuration) {
-      digitalWrite(BIG_SOUND, LOW);
-      digitalWrite(BOMB_LIGHT, LOW);
-      playBeep = false;
+        if (millis() - beepStart >= beepDuration) {
+            tone(BIG_SOUND, 0);
+            digitalWrite(BOMB_LIGHT, LOW);
+            playBeep = false;
+        }
     }
-  }
 }
 
 // select multiplexer channel
@@ -374,4 +377,17 @@ void updateDisplay() {
     } else {
         drawDie(dieValue);
     }
+}
+
+// read an LDR for debugging/calibrating purposes
+void debugReadLDR(int channel) {
+    muxSelect(channel);
+    delayMicroseconds(5); // settle time
+
+    int value = analogRead(MUX_SIG);
+
+    Serial.print("LDR ");
+    Serial.print(channel);
+    Serial.print(" value: ");
+    Serial.println(value);
 }

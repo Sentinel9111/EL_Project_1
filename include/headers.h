@@ -14,5 +14,6 @@ void drawPlayerTimer(int seconds, int y, bool active);
 void drawDie(int value);
 void updateDisplay();
 void mineExplode();
+void debugReadLDR(int channel);
 
 #endif //EL_PROJECT_1_HEADERS_H
