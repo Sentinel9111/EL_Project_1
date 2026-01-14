@@ -3,22 +3,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include "headers.h"
-// 16 LDR's "4x4" grid
-
-// [0 ] [1 ] [2 ] [3 ]
-// [4 ] [5 ] [6 ] [7 ]
-// [8 ] [9 ] [10] [11]
-// [12] [13] [14] [15]
-
-// Randomise mines (DONE)
-// Detect player with LDR (DONE)
-// Trigger mine when player stands on it (DONE)
-// Mine deactivates after trigger (DONE)
-// ST7735S display (DONE)
-// Timer and die (DONE)
-// Multiplexer (DONE)
-// LEDs and piëzo
-// Reset (DONE)
 
 // ST7735S TFT screen
 #define TFT_CS   5
@@ -35,24 +19,16 @@
 #define MUX_S3 26
 
 // buttons
-#define BUTTON 19
-#define RESET_BUTTON 21
+#define BUTTON 32
+#define RESET_BUTTON 33
 
-#define BOARD_SIZE 14 // amount of LDRs
+#define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
 #define PLAYER_TIME 120 // amount of time in seconds each player has
 #define LDR_THRESHOLD 100 // adjust based on light
 
 static_assert(MINE_COUNT <= BOARD_SIZE, "More mines than LDRs!"); // assert if MINE_COUNT is allowed
 // kijk Arnold ik heb vrijwillig een assertion geschreven!
-
-// LDR pins
-const int ldrPins[BOARD_SIZE] = {
-    32, 33, 34, 35,
-    36, 39, 12, 13,
-    14, 15, 25, 26,
-    27, 22
-};
 
 // Display layout
 #define TIMER_X  10
@@ -93,7 +69,7 @@ static unsigned long lastDisplayUpdate = 0;
 // button
 volatile bool buttonPressed = false;
 unsigned long lastButtonPress = 0;
-const unsigned long debounceDelay = 100;
+const unsigned long debounceDelay = 200;
 // reset button
 volatile bool resetPressed = false;
 unsigned long lastResetPress = 0;
@@ -252,11 +228,14 @@ void muxSelect(int channel) {
 }
 
 // check if pawn is present on an LDR square
-
 bool pawnPresentAt(int index) {
-    int value1 = analogRead(ldrPins[index]);
+    muxSelect(index);
+    delayMicroseconds(5); // wait for mux
+
+    // account for noise at the cost of 5 microseconds
+    int value1 = analogRead(MUX_SIG);
     delayMicroseconds(5);
-    int value2 = analogRead(ldrPins[index]);
+    int value2 = analogRead(MUX_SIG);
 
     int value = (value1 + value2) / 2;
     return value < LDR_THRESHOLD;
