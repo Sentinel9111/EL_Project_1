@@ -13,14 +13,14 @@
 
 // multiplexer
 #define MUX_SIG 34 // ADC input
-#define MUX_S0 16
-#define MUX_S1 17
-#define MUX_S2 25
-#define MUX_S3 26
+#define MUX_S0 35
+#define MUX_S1 32
+#define MUX_S2 33
+#define MUX_S3 25
 
 // buttons
-#define BUTTON 32
-#define RESET_BUTTON 33
+#define BUTTON 19
+#define RESET_BUTTON 21
 
 #define BOARD_SIZE 16 // amount of LDRs
 #define MINE_COUNT 6 // amount of mines
