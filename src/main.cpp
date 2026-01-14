@@ -18,8 +18,10 @@
 #define MUX_S2 33
 #define MUX_S3 25
 
+// LED and piëzo
 #define BOMB_LIGHT 12
 #define BIG_SOUND 13
+
 // buttons
 #define BUTTON 19
 #define RESET_BUTTON 21
@@ -75,7 +77,8 @@ const unsigned long debounceDelay = 200;
 // reset button
 volatile bool resetPressed = false;
 unsigned long lastResetPress = 0;
-//big sound
+
+// big sound
 bool playBeep = false;
 unsigned long beepStart = 0;
 const unsigned long beepDuration = 500;
@@ -136,8 +139,8 @@ void loop() {
     updateTimers();
     updateDisplay();
 
-    //handle mine explosions
-    MineExplode(); 
+    // handle mine explosions
+    mineExplode();
 
     // handle button press
     if (buttonPressed) {
@@ -233,8 +236,9 @@ void checkMines() {
         mines[i].previousState = currentState;
     }
 }
-//mine explodes setting of led
-void MineExplode(){
+
+// play a sound and turn an LED on when the bomb explodes
+void mineExplode(){
     if (playBeep) {
     digitalWrite(BIG_SOUND, HIGH);
     digitalWrite(BOMB_LIGHT, HIGH);
